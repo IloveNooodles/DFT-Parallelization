@@ -20,11 +20,6 @@ struct FreqMatrix
   double complex mat[MAX_N][MAX_N];
 };
 
-// double **create2dArray(int rows, int cols){
-//   double *cols = (int *)malloc(rows * cols * sizeof(int));
-//   double **arr = (int **)
-// }
-
 int readMatrix(int world_rank, int *n, struct Matrix *m, MPI_Comm comm)
 {
   if(world_rank == 0){
@@ -64,13 +59,12 @@ int main(void)
   int world_size;
   int world_rank;
   
-  int n, k, l;
+  int n, k, l, i;
   double elapsed;
   double complex sum = 0;
 
   /* local variable */
-  int local_n = 0, offset, local_x;
-  int *local_a, *local_b;
+  int offset;
   double start, finish, loc_elapsed;
   double complex local_sum;
 
@@ -86,25 +80,27 @@ int main(void)
   /* get start time */
   start = MPI_Wtime();
 
-  /* TODO define local k and l for start and end */  
-  int size = n / world_size; // 32 / 2 = 16
-  offset = world_rank * size; // 0 * 16, 1 * 16
-
-
+  /* block_size will be block_size * block_size; */
+  int block_size = n / world_size; 
+  int iteration = n * n / (block_size * block_size * world_size);
+  offset = world_rank * block_size; // 0 * 16, 1 * 16
+  
+  /* will compute block_size * block_size iteration times each process */
   local_sum = 0.0;
-  for(k = 0; k < n; k++){
-    for(l = 0; l < size; l++){
-      local_sum += dft(&source, k, l + offset);
+  for(i = 0; i < iteration; i++){
+    for(k = i * block_size; k < block_size * (i + 1); k++){
+      for(l = 0; l < block_size; l++){
+        local_sum += dft(&source, k, l + offset);
+      }
     }
   }
 
   MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
 
    /* finish time */
-
   finish = MPI_Wtime();
   loc_elapsed = finish - start;
-  MPI_Reduce(&loc_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&loc_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
   
   sum /= source.size;
