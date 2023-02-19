@@ -95,23 +95,6 @@ int main(void)
     }
   }
 
-  /* will compute block_size * block_size iteration times each process */
-  // for (i = 0; i < iteration; i++) {
-  //   for (k = i * block_size; k < block_size * (i + 1); k++) {
-  //     double complex arg = (k * offset / (double)n);
-  //     double complex exponent = cexp(-2.0I * M_PI * arg);
-  //     for (l = 0; l < block_size; l++) {
-  //       local_sum += source.mat[k][l + offset] * exponent;
-  //     }
-  //     for (l = block_size; l < n - offset; l += block_size) {
-  //       exponent *= cexp(-2.0I * M_PI * arg * block_size / (double)n);
-  //       for (int m = 0; m < block_size; m++) {
-  //         local_sum += source.mat[k][l + m] * exponent;
-  //       }
-  //     }
-  //   }
-  // }
-
   MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
 
    /* finish time */
