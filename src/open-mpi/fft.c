@@ -58,19 +58,19 @@ void fft_2d(cplx buf[], int rowLen, int offset, int block_size) {
 
 	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) {
 		fft(buf+i, rowLen);
-
-        MPI_Bcast(buf+i, rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 	}
+    MPI_Gather(buf + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, buf, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
 	transpose(buf, rowLen);
+    MPI_Bcast(buf, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
 	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) {
 		fft(buf+i, rowLen);
-
-        MPI_Bcast(buf+i, rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 	}
+    MPI_Gather(buf + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, buf, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
 	transpose(buf, rowLen);
+    MPI_Bcast(buf, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 }
 
 int main(int argc, char** argv) {
@@ -94,12 +94,10 @@ int main(int argc, char** argv) {
     }
 
     MPI_Bcast(&(rowLen), 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&(mat[0]), rowLen * rowLen,MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(mat, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    int block_size = rowLen / world_size;// 128/4 = 32
-    offset = world_rank * block_size;// 0, 32, 64, 96
+    int block_size = rowLen / world_size;
+    offset = world_rank * block_size;
 
     fft_2d(mat, rowLen, offset, block_size);
 
@@ -113,6 +111,8 @@ int main(int argc, char** argv) {
 
         printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
     }
+
+    MPI_Finalize();
 
     return 0;
 }
