@@ -77,6 +77,8 @@ int main(int argc, char** argv) {
     int world_size;
     int world_rank;
 
+    double start, finish;
+
     int rowLen, offset;
     cplx mat[MAX_N * MAX_N];
 
@@ -96,10 +98,16 @@ int main(int argc, char** argv) {
     MPI_Bcast(&(rowLen), 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(mat, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
+    MPI_Barrier(MPI_COMM_WORLD);
+
     int block_size = rowLen / world_size;
     offset = world_rank * block_size;
 
+    start = MPI_Wtime();
+
     fft_2d(mat, rowLen, offset, block_size);
+
+    finish = MPI_Wtime();
 
     if (world_rank == 0){
         cplx sum = 0;
@@ -109,6 +117,7 @@ int main(int argc, char** argv) {
 
         sum /= rowLen*rowLen*rowLen;
 
+        printf("Elapsed time: %e seconds\n", finish - start);
         printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
     }
 
