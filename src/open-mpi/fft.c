@@ -106,7 +106,7 @@ void fft_2d(cplx buf[], int rowLen, int world_rank, int world_size) {
 
 int main(int argc, char** argv) {
     int world_size, world_rank;
-    double start, finish;
+    double start_time, finish_time;
     struct Matrix m;
 
     MPI_Init(NULL, NULL);
@@ -116,11 +116,11 @@ int main(int argc, char** argv) {
     read_matrix(&m, world_rank);
     MPI_Barrier(MPI_COMM_WORLD);
 
-    start = MPI_Wtime();
+    start_time = MPI_Wtime();
     fft_2d(m.mat, m.size, world_rank, world_size);
-    finish = MPI_Wtime();
+    finish_time = MPI_Wtime();
 
-    print_result(&m, world_rank, finish - start);
+    print_result(&m, world_rank, finish_time - start_time);
     MPI_Finalize();
     return 0;
 }
