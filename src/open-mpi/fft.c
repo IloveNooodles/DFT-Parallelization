@@ -23,8 +23,8 @@ int readMatrix(int world_rank, int *n, struct Matrix *m, MPI_Comm comm) {
         }
     }
 
-    MPI_Bcast(&(m->size), 1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(&(m->mat[0][0]), m->size * m->size,MPI_DOUBLE, 0, comm);
+    MPI_Bcast(&(m->size), 1, MPI_INT, 0, comm);
+    MPI_Bcast(&(m->mat[0][0]), m->size * m->size, MPI_DOUBLE, 0, comm);
     return m->size;
 }
 
@@ -71,7 +71,7 @@ void fft_2d(struct Matrix *m, int n, int world_rank, int world_size) {
         }
     }
 
-    MPI_Gather(&m->mat[offset][0], n*(n/world_size), MPI_DOUBLE, &m->mat[0][0], n*(n/world_size), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gather(&m->mat[offset][0], (n/world_size) * n, MPI_DOUBLE, &m->mat[0][0], (n/world_size) * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     for (int i = 0; i < n; i++){
         for (int j = 0; j < n/world_size; j++){
@@ -95,7 +95,7 @@ void fft_2d(struct Matrix *m, int n, int world_rank, int world_size) {
 
     for (int i = 0; i < n; i++){
         for (int j = 0; j < n/world_size; j++){
-            local_col[i] = m->mat[offset + j][i];
+            local_row[i] = m->mat[offset + j][i];
         }
     }
     MPI_Gather(local_row, n*(n/world_size), MPI_DOUBLE_COMPLEX, &m->mat[0][0], n*(n/world_size), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
@@ -106,29 +106,43 @@ void fft_2d(struct Matrix *m, int n, int world_rank, int world_size) {
     free(local_col);
 }
 
-void printMatrix(struct Matrix *m) {
+void printResult(struct Matrix *m, double loc_elapsed, int world_rank) {
+    double complex local_sum = 0, sum = 0;
+    double elapsed;
+
     for (int i = 0; i < m->size; i++){
         for (int j = 0; j < m->size; j++){
-            printf("%.2f + %.2fi ", creal(m->mat[i][j]), cimag(m->mat[i][j]));
+            local_sum += m->mat[i][j];
         }
-        printf("\n");
     }
+
+    MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&loc_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    if (world_rank != 0) return;
+
+    printf("Elapsed time: %e seconds\n", elapsed);
+    printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
 }
 
 int main(int argc, char** argv) {
-    int world_rank, world_size;
+    struct Matrix m;
+    int n, world_rank, world_size;
+    double start, finish, loc_elapsed;
+
     MPI_Init(NULL, NULL);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
-    struct Matrix m;
-    int n = readMatrix(world_rank, &n, &m, MPI_COMM_WORLD);
+    n = readMatrix(world_rank, &n, &m, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 
+    start = MPI_Wtime();
     fft_2d(&m, n, world_rank, world_size);
+    finish = MPI_Wtime();
 
-    if (world_rank == 0){
-        printMatrix(&m);
-    }
+    loc_elapsed = finish - start;
+    printResult(&m, loc_elapsed, world_rank);
 
     MPI_Finalize();
     return 0;
