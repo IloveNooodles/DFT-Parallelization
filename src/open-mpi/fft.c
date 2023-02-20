@@ -7,143 +7,112 @@
 #include <mpi.h>
 
 #define MAX_N 512
+typedef double complex cplx;
 
-struct Matrix {
-    int size;
-    double mat[MAX_N][MAX_N];
-};
+void fft(cplx buf[], int n) {
+	int i, j, len;
+	for (i = 1, j = 0; i < n; i++) {
+		int bit = n >> 1;
+		for (; j & bit; bit >>= 1)
+				j ^= bit;
+		j ^= bit;
 
-int readMatrix(int world_rank, int *n, struct Matrix *m, MPI_Comm comm) {
-    if(world_rank == 0){
-        scanf("%d", &(m->size));
-        for (int i = 0; i < m->size; i++){
-        for (int j = 0; j < m->size; j++){
-            scanf("%lf", &(m->mat[i][j]));
-        }
-        }
+		cplx temp;
+        if (i < j) {
+			temp = buf[i];
+			buf[i] = buf[j];
+			buf[j] = temp;
+		}
     }
 
-    MPI_Bcast(&(m->size), 1, MPI_INT, 0, comm);
-    MPI_Bcast(&(m->mat[0][0]), m->size * m->size, MPI_DOUBLE, 0, comm);
-    return m->size;
+	cplx w, u, v;
+    for (len = 2; len <= n; len <<= 1)  {
+		double ang = 2 * M_PI / len;
+
+		for (i = 0; i < n; i += len)  {
+			for (j = 0; j < (len / 2); j++) {
+				w = cexp(-I * ang * j);
+				u = buf[i+j];
+				v = buf[i+j+(len/2)] * w;
+				buf[i+j] = u + v;
+				buf[i+j+(len/2)] = u - v;
+			}
+		}
+    }
 }
 
-void fft(double complex *x, int n) {
-    if (n <= 1) {
-        return;
-    }
-
-    double complex *even = malloc(n/2 * sizeof(double complex));
-    double complex *odd = malloc(n/2 * sizeof(double complex));
-    for (int i = 0; i < n/2; i++) {
-        even[i] = x[2*i];
-        odd[i] = x[2*i+1];
-    }
-
-    fft(even, n/2);
-    fft(odd, n/2);
-
-    for (int i = 0; i < n/2; i++) {
-        double complex w = cexp(-2.0 * M_PI * I * i / n) * odd[i];
-        x[i] = even[i] + w;
-        x[i+n/2] = even[i] - w;
-    }
-
-    free(even);
-    free(odd);
+void transpose(cplx buf[], int rowLen) {
+	int i, j;
+	cplx temp;
+	for (i = 0; i < rowLen; i++) {
+		for (j = i+1; j < rowLen; j++) {
+			temp = buf[i*rowLen + j];
+			buf[i*rowLen + j] = buf[j*rowLen + i];
+			buf[j*rowLen + i] = temp;
+		}
+	}
 }
 
-void fft_2d(struct Matrix *m, int n, int world_rank, int world_size) {
-    int offset = world_rank * (n/world_size);
+void fft_2d(cplx buf[], int rowLen, int offset, int block_size) {
+	int i;
 
-    double complex *row = malloc(n * sizeof(double complex));
-    double complex *col = malloc(n * sizeof(double complex));
-    double complex *local_row = malloc((n/world_size) * sizeof(double complex));
-    double complex *local_col = malloc((n/world_size) * sizeof(double complex));
+	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) {
+		fft(buf+i, rowLen);
 
-    for (int i = offset; i < offset + (n/world_size); i++){
-        for (int j = 0; j < n; j++){
-        row[j] = m->mat[i][j];
-        }
-        fft(row, n);
-        for (int j = 0; j < n; j++){
-        m->mat[i][j] = row[j];
-        }
-    }
+        MPI_Bcast(buf+i, rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+	}
 
-    MPI_Gather(&m->mat[offset][0], (n/world_size) * n, MPI_DOUBLE, &m->mat[0][0], (n/world_size) * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	transpose(buf, rowLen);
 
-    for (int i = 0; i < n; i++){
-        for (int j = 0; j < n/world_size; j++){
-            col[i] = m->mat[offset + j][i];
-        }
-        MPI_Allgather(&col[offset], n/world_size, MPI_DOUBLE_COMPLEX, local_col, n/world_size, MPI_DOUBLE_COMPLEX, MPI_COMM_WORLD);
-        for (int j = 0; j < n; j++){
-            m->mat[j][offset + i] = local_col[j - (world_rank * (n/world_size))];
-        }
-    }
+	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) {
+		fft(buf+i, rowLen);
 
-    for (int i = offset; i < offset + (n/world_size); i++){
-        for (int j = 0; j < n; j++){
-            col[j] = m->mat[i][j];
-        }
-        fft(col, n);
-        for (int j = 0; j < n; j++){
-            m->mat[i][j] = col[j];
-        }
-    }
+        MPI_Bcast(buf+i, rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+	}
 
-    for (int i = 0; i < n; i++){
-        for (int j = 0; j < n/world_size; j++){
-            local_row[i] = m->mat[offset + j][i];
-        }
-    }
-    MPI_Gather(local_row, n*(n/world_size), MPI_DOUBLE_COMPLEX, &m->mat[0][0], n*(n/world_size), MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
-
-    free(row);
-    free(col);
-    free(local_row);
-    free(local_col);
-}
-
-void printResult(struct Matrix *m, double loc_elapsed, int world_rank) {
-    double complex local_sum = 0, sum = 0;
-    double elapsed;
-
-    for (int i = 0; i < m->size; i++){
-        for (int j = 0; j < m->size; j++){
-            local_sum += m->mat[i][j];
-        }
-    }
-
-    MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&loc_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-    if (world_rank != 0) return;
-
-    printf("Elapsed time: %e seconds\n", elapsed);
-    printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
+	transpose(buf, rowLen);
 }
 
 int main(int argc, char** argv) {
-    struct Matrix m;
-    int n, world_rank, world_size;
-    double start, finish, loc_elapsed;
+    int world_size;
+    int world_rank;
+
+    int rowLen, offset;
+    cplx mat[MAX_N * MAX_N];
 
     MPI_Init(NULL, NULL);
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-    n = readMatrix(world_rank, &n, &m, MPI_COMM_WORLD);
+    if(world_rank == 0){
+        scanf("%d", &rowLen);
+        for (int i = 0; i < rowLen*rowLen; i++){
+            double element;
+            scanf("%lf", &(element));
+            mat[i] = element + 0.0I;
+        }
+    }
+
+    MPI_Bcast(&(rowLen), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&(mat[0]), rowLen * rowLen,MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
     MPI_Barrier(MPI_COMM_WORLD);
 
-    start = MPI_Wtime();
-    fft_2d(&m, n, world_rank, world_size);
-    finish = MPI_Wtime();
+    int block_size = rowLen / world_size;// 128/4 = 32
+    offset = world_rank * block_size;// 0, 32, 64, 96
 
-    loc_elapsed = finish - start;
-    printResult(&m, loc_elapsed, world_rank);
+    fft_2d(mat, rowLen, offset, block_size);
 
-    MPI_Finalize();
+    if (world_rank == 0){
+        cplx sum = 0;
+        for (int i = 0; i < rowLen*rowLen; i++){
+            sum += mat[i];
+        }
+
+        sum /= rowLen*rowLen*rowLen;
+
+        printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
+    }
+
     return 0;
 }
