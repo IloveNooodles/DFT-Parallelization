@@ -84,3 +84,69 @@ MPI_Reduce(&local_sum, &sum, 1, MPI_DOUBLE_COMPLEX, MPI_SUM, 0, MPI_COMM_WORLD);
 2. After the local sum is being calculated, we use `MPI_Reduce` to sent the sum to the `sum` global variable. and then we put `MPI_Finalize` in the end to end the process to state that MPI Process is done
 
 ## FFT
+
+FFT (Fast Fourier Transform) is another algorithm that can be used to calculate the DFT. The algorithm is basically the same as DFT but the calculation is different. This algorithm allows for higher speeds than DFT.
+
+The algorithm starts off the same with DFT, reading the matrix but also converting it into the complex space.
+
+The main difference is that FFT uses a Divide and Conquer approach. The main FFT code can be seen here:
+
+```c
+void fft(cplx buf[], int n) {
+  int i, j, len;
+  for (i = 1, j = 0; i < n; i++) {
+    int bit = n >> 1;
+    for (; j & bit; bit >>= 1)
+      j ^= bit;
+    j ^= bit;
+
+    cplx temp;
+    if (i < j) {
+      temp = buf[i];
+      buf[i] = buf[j];
+      buf[j] = temp;
+    }
+  }
+
+  cplx w, u, v;
+    for (len = 2; len <= n; len <<= 1)  {
+    double ang = 2 * M_PI / len;
+
+    for (i = 0; i < n; i += len)  {
+      for (j = 0; j < (len / 2); j++) {
+        w = cexp(-I * ang * j);
+        u = buf[i+j];
+        v = buf[i+j+(len/2)] * w;
+        buf[i+j] = u + v;
+        buf[i+j+(len/2)] = u - v;
+      }
+    }
+  }
+}
+```
+
+The above code shows how FFT works on a one-dimensional matrix. The algorithm could then be extended to 2D matrices (and also be parallelized) using this piece of code:
+
+```c
+void fft_2d(cplx buf[], int rowLen, int world_rank, int world_size) {
+  int i;
+    int block_size = rowLen / world_size;
+    int offset = world_rank * block_size;
+
+  for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) fft(buf+i, rowLen);
+    MPI_Gather(buf + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, buf, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+
+  transpose(buf, rowLen);
+  MPI_Bcast(buf, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+
+  for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) fft(buf+i, rowLen);
+    MPI_Gather(buf + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, buf, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+
+  transpose(buf, rowLen);
+  MPI_Bcast(buf, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+}
+```
+
+The above code parallelizes the FFT while extending it to 2-dimensional matrices. The algorithm essentially repeats the calculation for one dimensional FFT for the rows of the matrix, and then transposes the matrix to calculate for the columns. The algorithm is parallelized by dividing the calculation into a few block sizes which will be run parallel.
+
+FFT allows for higher speeds in calculating the DFT of a matrix. One such case leads to a more than 8x improvement, checking out the bonus.
