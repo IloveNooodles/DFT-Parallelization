@@ -4,72 +4,72 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 #define MAX_N 512
 typedef double complex cplx;
 
-void fft(cplx buf[], int n) {
+void transpose_matrix(cplx mat[], int rowLen) {
+	int i, j;
+	cplx temp;
+
+	for (i = 0; i < rowLen; i++) {
+		for (j = i+1; j < rowLen; j++) {
+			temp = mat[i*rowLen + j];
+			mat[i*rowLen + j] = mat[j*rowLen + i];
+			mat[j*rowLen + i] = temp;
+		}
+	}
+}
+
+void fft(cplx mat[], int n) {
 	int i, j, len;
-	for (i = 1, j = 0; i < n; i++) {
+
+    j = 0;
+	for (i = 1; i < n; i++) {
 		int bit = n >> 1;
-		for (; j & bit; bit >>= 1)
-				j ^= bit;
+
+		for (; j & bit; bit >>= 1) j ^= bit;
 		j ^= bit;
 
 		cplx temp;
         if (i < j) {
-			temp = buf[i];
-			buf[i] = buf[j];
-			buf[j] = temp;
+			temp = mat[i];
+			mat[i] = mat[j];
+			mat[j] = temp;
 		}
     }
 
-	cplx w, u, v;
+	cplx u, v;
     for (len = 2; len <= n; len <<= 1)  {
 		double ang = 2 * M_PI / len;
 
 		for (i = 0; i < n; i += len)  {
 			for (j = 0; j < (len / 2); j++) {
-				w = cexp(-I * ang * j);
-				u = buf[i+j];
-				v = buf[i+j+(len/2)] * w;
-				buf[i+j] = u + v;
-				buf[i+j+(len/2)] = u - v;
+				u = mat[i + j];
+				v = mat[i + j + (len/2)] * cexp(-I * ang * j);
+
+				mat[i + j] = u + v;
+				mat[i + j + (len / 2)] = u - v;
 			}
 		}
     }
 }
 
-void transpose(cplx buf[], int rowLen) {
-	int i, j;
-	cplx temp;
-	for (i = 0; i < rowLen; i++) {
-		for (j = i+1; j < rowLen; j++) {
-			temp = buf[i*rowLen + j];
-			buf[i*rowLen + j] = buf[j*rowLen + i];
-			buf[j*rowLen + i] = temp;
-		}
-	}
-}
-
 void fft_2d(cplx buf[], int rowLen, int n) {
 	int i;
-	for(i = 0; i < n; i += rowLen) {
-		fft(buf+i, rowLen);
-	}
 
-	transpose(buf, rowLen);
+	for(i = 0; i < n; i += rowLen) fft(buf+i, rowLen);
+	transpose_matrix(buf, rowLen);
 
-	for(i = 0; i < n; i += rowLen) {
-		fft(buf+i, rowLen);
-	}
-
-	transpose(buf, rowLen);
+	for(i = 0; i < n; i += rowLen) fft(buf+i, rowLen);
+	transpose_matrix(buf, rowLen);
 }
 
 int main(int argc, char** argv) {
     int rowLen;
     cplx mat[MAX_N * MAX_N];
+
     scanf("%d", &rowLen);
     for (int i = 0; i < rowLen*rowLen; i++){
         double element;
@@ -77,17 +77,15 @@ int main(int argc, char** argv) {
         mat[i] = element + 0.0I;
     }
 
+	double start = clock();
     fft_2d(mat, rowLen, rowLen*rowLen);
+	double end = clock();
 
     cplx sum = 0;
-
-    for (int i = 0; i < rowLen*rowLen; i++){
-        sum += mat[i];
-    }
-
+    for (int i = 0; i < rowLen*rowLen; i++) sum += mat[i];
     sum /= rowLen*rowLen*rowLen;
 
+	printf("Elapsed time: %e seconds\n", (end - start) / CLOCKS_PER_SEC);
     printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
-
     return 0;
 }

@@ -42,66 +42,69 @@ void print_result(struct Matrix *m, int world_rank, double elapsed_time) {
     printf("Average : (%lf, %lf)", creal(sum), cimag(sum));
 }
 
-void fft(cplx buf[], int n) {
+void transpose_matrix(cplx mat[], int rowLen) {
+	int i, j;
+	cplx temp;
+
+	for (i = 0; i < rowLen; i++) {
+		for (j = i+1; j < rowLen; j++) {
+			temp = mat[i*rowLen + j];
+			mat[i*rowLen + j] = mat[j*rowLen + i];
+			mat[j*rowLen + i] = temp;
+		}
+	}
+}
+
+void fft(cplx mat[], int n) {
 	int i, j, len;
-	for (i = 1, j = 0; i < n; i++) {
+
+    j = 0;
+	for (i = 1; i < n; i++) {
 		int bit = n >> 1;
-		for (; j & bit; bit >>= 1)
-				j ^= bit;
+
+		for (; j & bit; bit >>= 1) j ^= bit;
 		j ^= bit;
 
 		cplx temp;
         if (i < j) {
-			temp = buf[i];
-			buf[i] = buf[j];
-			buf[j] = temp;
+			temp = mat[i];
+			mat[i] = mat[j];
+			mat[j] = temp;
 		}
     }
 
-	cplx w, u, v;
+	cplx u, v;
     for (len = 2; len <= n; len <<= 1)  {
 		double ang = 2 * M_PI / len;
 
 		for (i = 0; i < n; i += len)  {
 			for (j = 0; j < (len / 2); j++) {
-				w = cexp(-I * ang * j);
-				u = buf[i+j];
-				v = buf[i+j+(len/2)] * w;
-				buf[i+j] = u + v;
-				buf[i+j+(len/2)] = u - v;
+				u = mat[i + j];
+				v = mat[i + j + (len/2)] * cexp(-I * ang * j);
+
+				mat[i + j] = u + v;
+				mat[i + j + (len / 2)] = u - v;
 			}
 		}
     }
 }
 
-void transpose(cplx buf[], int rowLen) {
-	int i, j;
-	cplx temp;
-	for (i = 0; i < rowLen; i++) {
-		for (j = i+1; j < rowLen; j++) {
-			temp = buf[i*rowLen + j];
-			buf[i*rowLen + j] = buf[j*rowLen + i];
-			buf[j*rowLen + i] = temp;
-		}
-	}
-}
-
-void fft_2d(cplx buf[], int rowLen, int world_rank, int world_size) {
+void fft_2d(cplx mat[], int rowLen, int world_rank, int world_size) {
 	int i;
     int block_size = rowLen / world_size;
     int offset = world_rank * block_size;
 
-	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) fft(buf+i, rowLen);
-    MPI_Gather(buf + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, buf, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) fft(mat+i, rowLen);
+    MPI_Gather(mat + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, mat, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
-	transpose(buf, rowLen);
-    MPI_Bcast(buf, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+	transpose_matrix(mat, rowLen);
+    MPI_Bcast(mat, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
-	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) fft(buf+i, rowLen);
-    MPI_Gather(buf + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, buf, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+	for(i = rowLen * offset; i < rowLen * (offset + block_size); i += rowLen) fft(mat+i, rowLen);
+    MPI_Gather(mat + rowLen * offset, rowLen * block_size, MPI_DOUBLE_COMPLEX, mat, rowLen * block_size, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
-	transpose(buf, rowLen);
-    MPI_Bcast(buf, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
+	transpose_matrix(mat, rowLen);
+    MPI_Bcast(mat, rowLen * rowLen, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 }
 
 int main(int argc, char** argv) {
