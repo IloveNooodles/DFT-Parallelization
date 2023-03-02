@@ -13,10 +13,9 @@ struct Matrix
   double mat[MAX_N][MAX_N];
 };
 
-struct FreqMatrix
-{
-  int size;
-  double complex mat[MAX_N][MAX_N];
+struct FreqMatrix {
+    int    size;
+    double complex mat[MAX_N][MAX_N];
 };
 
 int readMatrix(int *n, struct Matrix *m)
@@ -49,10 +48,9 @@ double complex dft(struct Matrix *mat, int k, int l)
 int main(void) 
 {
   struct Matrix source;
-  struct FreqMatrix freq;
+  struct FreqMatrix result;
   
   int n, k, l;
-  double elapsed;
   double complex sum = 0;
 
   double start, finish;
@@ -61,12 +59,24 @@ int main(void)
 
   start = omp_get_wtime();
 
-  #pragma omp parallel shared(source) num_threads(8)
+  #pragma omp parallel shared(source, result) num_threads(8) 
   {
-    #pragma omp for collapse(2) reduction(+:sum)
+    // #pragma omp for collapse(2) reduction(+: sum) schedule(static) nowait
+    #pragma omp for collapse(2) schedule(static)
     for (k = 0; k < source.size; k++){
       for (l = 0; l < source.size; l++){
-        sum += dft(&source, k, l);
+        // sum += dft(&source, k, l);
+        result.mat[k][l] = dft(&source, k, l);
+      }
+    }
+  }
+
+  #pragma omp parallel shared(result) num_threads(8) 
+  {
+    #pragma omp for collapse(2) reduction(+: sum) schedule(static)
+    for (k = 0; k < source.size; k++){
+      for (l = 0; l < source.size; l++){
+        sum += result.mat[k][l];
       }
     }
   }

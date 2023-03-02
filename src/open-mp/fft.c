@@ -1,5 +1,3 @@
-/* compile: mpicc mpi.c -o mpi */
-/* run: mpirun -n 4 ./bin/parallel_mpi*/
 #include <omp.h>
 #include <complex.h>
 #include <stdio.h>

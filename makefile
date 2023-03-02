@@ -9,6 +9,8 @@ mpi:
 
 mp:
 	gcc src/open-mp/dft.c --openmp -g -Wall -o $(OUTPUT_FOLDER)/parallel_dft_mp -lm
+	gcc src/open-mp/fft.c --openmp -g -Wall -o $(OUTPUT_FOLDER)/parallel_fft_mp -lm
+	gcc src/open-mp/fft.c --openmp -g -Wall -o $(OUTPUT_FOLDER)/serial_fft_mp -lm
 
 parallel: mpi mp
 
