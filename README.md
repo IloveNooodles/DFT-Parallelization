@@ -19,4 +19,12 @@ Benchmark
 | 256 | 3m 54s | 0.0357s | 1m 24s| 3.08e-2 s |
 | 512 | 71m 6.124s | 0.14s | 35m | 7.84e-2 s |
 
+## MP
+
+What have been implemented
+
+- DFT Parallel
+- FFT Serial
+- FFT Parallel
+
 Made with love from ayah_dan_ibu
