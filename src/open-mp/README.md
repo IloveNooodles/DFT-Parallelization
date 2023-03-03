@@ -20,7 +20,7 @@ In the OpenMP implementation, the optimization is done by adding #pragma directi
 On our code, we used the following code to optimize the parallelization of the summation:
 
 ```c
-  #pragma omp parallel shared(source, result) num_threads(8) 
+  #pragma omp parallel shared(source, result) num_threads(8)
   {
     #pragma omp for collapse(2) schedule(static)
     for (k = 0; k < source.size; k++){
@@ -30,7 +30,7 @@ On our code, we used the following code to optimize the parallelization of the s
     }
   }
 
-  #pragma omp parallel shared(result) num_threads(8) 
+  #pragma omp parallel shared(result) num_threads(8)
   {
     #pragma omp for collapse(2) reduction(+: sum) schedule(static)
     for (k = 0; k < source.size; k++){
@@ -39,9 +39,9 @@ On our code, we used the following code to optimize the parallelization of the s
       }
     }
   }
-  ```
+```
 
-On the first part of the summation, we used the `collapse` directive to collapse the two loops into one. This is done to make the code more readable and to make the compiler optimize the code better. We also used the `schedule(static)` directive to make the compiler schedule the threads statically. This is done to make the compiler schedule the threads in a way that is more efficient.
+On the first part of the summation, we used the `collapse` directive to collapse the two loops into one. This is done to make the code more readable and to make the compiler optimize the code better. We also used the `schedule(static)` directive to make the compiler schedule the threads use cyclic schedule. This is done to make the compiler schedule the threads in a way that is more efficient and gain more speedup.
 
 Also, we used the `#pragma omp parallel shared(source, result) num_threads(8)` directive to make the compiler use 8 threads. This is done to make the compiler use the maximum number of threads available. This directive is also used to make the compiler know that the `source` and `result` variables are shared between the threads.
 
