@@ -27,6 +27,24 @@ void readMatrix(int *n, cuDoubleComplex *m)
   }
 };
 
+__device__ __forceinline__ cuComplex cuExp (cuComplex z)
+
+{
+
+    cuComplex res;
+
+    float t = expf (z.x);
+
+    sincosf (z.y, &res.y, &res.x);
+
+    res.x *= t;
+
+    res.y *= t;
+
+    return res;
+
+}
+
 __global__ void dft2d_kernel(cuDoubleComplex *in, cuDoubleComplex *out, int width, int height, int dir)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
