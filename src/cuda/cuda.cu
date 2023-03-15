@@ -13,19 +13,21 @@
 #include <helper_functions.h>
 #include <helper_cuda.h>
 
+#include <cuComplex.h>
+
 #define MAX_N 512
 
-void readMatrix(int *n, float2 *m)
+void readMatrix(int *n, cuDoubleComplex *m)
 {
   scanf("%d", n);
   for (int i = 0; i < *n; i++){
     for (int j = 0; j < *n; j++){
-      scanf("%f", &m[i * *n + j].x);
+      scanf("%lf", &m[i * *n + j].x);
     }
   }
 };
 
-__global__ void dft2d_kernel(float2 *in, float2 *out, int width, int height, int dir)
+__global__ void dft2d_kernel(cuDoubleComplex *in, cuDoubleComplex *out, int width, int height, int dir)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -35,36 +37,46 @@ __global__ void dft2d_kernel(float2 *in, float2 *out, int width, int height, int
 
     int idx = y * width + x;
 
-    float sum_real = 0;
-    float sum_imag = 0;
+    // double sum_real = 0;
+    // double sum_imag = 0;
+
+    cuDoubleComplex sum = make_cuDoubleComplex(0.0f, 0.0f);
 
     for (int k = 0; k < height; k++)
     {
         for (int l = 0; l < width; l++)
         {
-            float angle = 2 * M_PI * (dir == 1 ? (x * k / (float)width + y * l / (float)height) : (x * k / (float)width - y * l / (float)height));
-            sum_real += in[k * width + l].x * cos(angle);
-            sum_imag += -in[k * width + l].x * sin(angle);
+            double angle = 2 * M_PI * (dir == 1 ? (x * k / (double)width + y * l / (double)height) : (x * k / (double)width - y * l / (double)height));
+            
+            cuDoubleComplex twiddle = make_cuDoubleComplex(cos(angle), sin(angle));
+            cuDoubleComplex temp = cuCmul(in[k * width + l], twiddle);
+
+            sum = cuCadd(sum, temp);
+            
+            // sum_real += in[k * width + l].x * cos(angle);
+            // sum_imag += -in[k * width + l].x * sin(angle);
         }
     }
 
-    out[idx].x = (dir == 1 ? 1 : 1.0 / (width * height)) * sum_real;
-    out[idx].y = (dir == 1 ? 1 : 1.0 / (width * height)) * sum_imag;
+
+    out[idx] = cuCmul(make_cuDoubleComplex((dir == 1 ? 1.0 : 1.0 / (width * height)), 0.0), sum);
+    // out[idx].x = (dir == 1 ? 1 : 1.0 / (width * height)) * sum_real;
+    // out[idx].y = (dir == 1 ? 1 : 1.0 / (width * height)) * sum_imag;
 }
 
-void dft2d_cuda(float2 *d_idata, float2 *d_odata, int width, int height, int dir)
+void dft2d_cuda(cuDoubleComplex *d_idata, cuDoubleComplex *d_odata, int width, int height, int dir)
 {
-    float2 *d_in, *d_out;
-    cudaMalloc(&d_in, width * height * sizeof(float2));
-    cudaMalloc(&d_out, width * height * sizeof(float2));
+    cuDoubleComplex *d_in, *d_out;
+    cudaMalloc(&d_in, width * height * sizeof(cuDoubleComplex));
+    cudaMalloc(&d_out, width * height * sizeof(cuDoubleComplex));
 
-    cudaMemcpy(d_in, d_idata, width * height * sizeof(float2), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_in, d_idata, width * height * sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
 
     dim3 block_size(16, 16);
     dim3 grid_size(width / block_size.x, height / block_size.y);
     dft2d_kernel<<<grid_size, block_size>>>(d_in, d_out, width, height, dir);
 
-    cudaMemcpy(d_odata, d_out, width * height * sizeof(float2), cudaMemcpyDeviceToHost);
+    cudaMemcpy(d_odata, d_out, width * height * sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
     cudaFree(d_in);
     cudaFree(d_out);
@@ -72,11 +84,11 @@ void dft2d_cuda(float2 *d_idata, float2 *d_odata, int width, int height, int dir
 
 int main(void) 
 {
-  float2 *source = (float2*)malloc(sizeof(float2) * MAX_N * MAX_N);
-  float2 *result = (float2*)malloc(sizeof(float2) * MAX_N * MAX_N);
+  cuDoubleComplex *source = (cuDoubleComplex*)malloc(sizeof(cuDoubleComplex) * MAX_N * MAX_N);
+  cuDoubleComplex *result = (cuDoubleComplex*)malloc(sizeof(cuDoubleComplex) * MAX_N * MAX_N);
 
   int n, k, l;
-  float2 sum = make_float2(0.0f, 0.0f);
+  cuDoubleComplex sum = make_cuDoubleComplex(0.0f, 0.0f);
 
   readMatrix(&n, source);
 
