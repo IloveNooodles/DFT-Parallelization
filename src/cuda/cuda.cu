@@ -8,11 +8,6 @@
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
 #include <cuda_runtime_api.h>
-
-// Helper functions and utilities to work with CUDA
-#include <helper_functions.h>
-#include <helper_cuda.h>
-
 #include <cuComplex.h>
 
 #define MAX_N 512
