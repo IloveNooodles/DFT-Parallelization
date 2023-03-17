@@ -55,9 +55,6 @@ __global__ void dft2d_kernel(cuDoubleComplex *in, cuDoubleComplex *out, int widt
 
     int idx = y * width + x;
 
-    // double sum_real = 0;
-    // double sum_imag = 0;
-
     cuDoubleComplex sum = make_cuDoubleComplex(0.0f, 0.0f);
 
     for (int k = 0; k < height; k++)
@@ -70,16 +67,10 @@ __global__ void dft2d_kernel(cuDoubleComplex *in, cuDoubleComplex *out, int widt
             cuDoubleComplex temp = cuCmul(in[k * width + l], twiddle);
 
             sum = cuCadd(sum, temp);
-            
-            // sum_real += in[k * width + l].x * cos(angle);
-            // sum_imag += -in[k * width + l].x * sin(angle);
         }
     }
 
-
     out[idx] = cuCmul(make_cuDoubleComplex((dir == 1 ? 1.0 : 1.0 / (width * height)), 0.0), sum);
-    // out[idx].x = (dir == 1 ? 1 : 1.0 / (width * height)) * sum_real;
-    // out[idx].y = (dir == 1 ? 1 : 1.0 / (width * height)) * sum_imag;
 }
 
 void dft2d_cuda(cuDoubleComplex *d_idata, cuDoubleComplex *d_odata, int width, int height, int dir)
