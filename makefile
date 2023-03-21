@@ -1,7 +1,6 @@
 OUTPUT_FOLDER = bin
 
-all: 
-	serial parallel
+all: serial parallel
 
 mpi:
 	mpicc src/open-mpi/dft.c -g -Wall -o $(OUTPUT_FOLDER)/parallel_dft_mpi -lm
@@ -13,8 +12,7 @@ mp:
 	gcc src/open-mp/fft.c --openmp -g -Wall -o $(OUTPUT_FOLDER)/parallel_fft_mp -lm
 	gcc src/open-mp/fft.c --openmp -g -Wall -o $(OUTPUT_FOLDER)/serial_fft_mp -lm
 
-parallel: 
-	mpi mp
+parallel: mpi mp
 
 serial:
 	gcc src/serial/c/serial.c -o $(OUTPUT_FOLDER)/serial_dft_c -lm

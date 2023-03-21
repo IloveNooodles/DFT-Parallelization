@@ -79,7 +79,10 @@ int main(void)
   MPI_Barrier(MPI_COMM_WORLD);
   /* get start time */
   start = MPI_Wtime();
-
+  //32 * 32
+  // 32 / 4
+  // 32 * 32
+  // 4 * 16 * 16
   /* block_size will be block_size * block_size; */
   int block_size = n / world_size; 
   int iteration = n * n / (block_size * block_size * world_size);
